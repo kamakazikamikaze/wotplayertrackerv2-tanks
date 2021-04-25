@@ -161,9 +161,9 @@ class ResultProcessor(object):
                                 Tank(
                                     t['account_id'],
                                     t['tank_id'],
-                                    work[2],
                                     t['all']['battles'],
-                                ) for __, t in response['data'][str(work[1])].items() if t),
+                                    work[2],
+                                ) for t in response['data'][str(work[1])]) if response['data'][str(work[1])] else None,
                             start.timestamp(),
                             work[0]
                         )
@@ -171,6 +171,8 @@ class ResultProcessor(object):
                 except KeyError:
                     self.log.warning('Batch %i has no "data" key', work[0])
                     self.log.warning('Batch %i: %s', work[0], str(response))
+                except TypeError:
+                    self.log.warning('Batch %i: "NoneType" object encountered: account_id - %i', work[0], work[1])
             except Empty:
                 pass
 

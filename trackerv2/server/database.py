@@ -5,7 +5,7 @@ from datetime import datetime
 async def setup_database(db):
     conn = await asyncpg.connect(**db)
     __ = await conn.execute('''
-        CREATE TABLE player_tanks (
+        CREATE TABLE IF NOT EXISTS player_tanks (
             account_id integer REFERENCES players (account_id),
             tank_id integer NOT NULL,
             battles integer NOT NULL,
@@ -105,11 +105,11 @@ async def setup_database(db):
                 FOR i IN 0..(SELECT MAX(account_id) / 1000 FROM temp_player_tanks)
                 LOOP
                     INSERT INTO player_tanks (
-                        account_id, tank_id, battles, console)
+                        account_id, tank_id, battles, console, _last_api_pull)
                     SELECT * FROM temp_player_tanks
                     WHERE account_id > (1000 * i) AND account_id <= (1000 * i)
-                    ON CONFLICT DO UPDATE
-                    SET (battles, console) = (EXCLUDED.battles, EXCLUDED.console)
+                    ON CONFLICT (account_id, tank_id) DO UPDATE
+                    SET (battles, console, _last_api_pull) = (EXCLUDED.battles, EXCLUDED.console, EXCLUDED._last_api_pull)
                     WHERE player_tanks.battles <> EXCLUDED.battles;
                 END LOOP;
             END

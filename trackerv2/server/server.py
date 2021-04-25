@@ -516,18 +516,22 @@ async def send_results_to_database(db_pool, res_queue, work_done, par, chi):
             except Empty:
                 continue
             try:
+                if results[0] is None:
+                    # No tank data
+                    continue
                 __ = await conn.executemany(
                     (
                         'INSERT INTO temp_player_tanks ('
-                        'account_id, tank_id, battles, console)'
+                        'account_id, tank_id, battles, console, _last_api_pull)'
                         'VALUES ('
                         '$1::int, '
                         '$2::int, '
                         '$3::int, '
-                        '$4::text) '
+                        '$4::text, '
+                        'to_timestamp($5)::timestamp)'
                         'ON CONFLICT DO NOTHING'
                     ),
-                    results[0]
+                    tuple((*p, results[1]) for p in results[0])
                 )
                 logger.debug(
                     'Process-%i: Async-%i submitted batch %i',
@@ -636,8 +640,7 @@ def setup_work(config):
             'SELECT account_id, console FROM total_battles_{0} UNION SELECT account_id, console FROM diff_battles_{0}'.format(
                 day.strftime('%Y_%m_%d'))))
     del conn
-    for i, row in enumerate(result):
-        yield (i, row['account_id'], row['console'])
+    return ((i, row['account_id'], row['console']) for i, row in enumerate(result))
 
 
 def calculate_total_batches(config):
@@ -728,7 +731,6 @@ if __name__ == '__main__':
     manager = Manager()
     workdone = manager.list()
     received_queue = manager.Queue()
-    # TODO: Update setup_work to pull from DB
     workgenerator = setup_work(server_config)
     totalbatches = calculate_total_batches(server_config)
     assignedwork = nested_dd()
