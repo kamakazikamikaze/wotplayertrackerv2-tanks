@@ -107,7 +107,7 @@ async def setup_database(db):
                     INSERT INTO player_tanks (
                         account_id, tank_id, battles, console, _last_api_pull)
                     SELECT * FROM temp_player_tanks
-                    WHERE account_id > (1000 * i) AND account_id <= (1000 * i)
+                    WHERE account_id BETWEEN i AND (1000 * i)
                     ON CONFLICT (account_id, tank_id) DO UPDATE
                     SET (battles, console, _last_api_pull) = (EXCLUDED.battles, EXCLUDED.console, EXCLUDED._last_api_pull)
                     WHERE player_tanks.battles <> EXCLUDED.battles;
