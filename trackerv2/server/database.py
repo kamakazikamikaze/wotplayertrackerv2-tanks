@@ -6,7 +6,7 @@ async def setup_database(db):
     conn = await asyncpg.connect(**db)
     __ = await conn.execute('''
         CREATE TABLE IF NOT EXISTS player_tanks (
-            account_id integer REFERENCES players (account_id),
+            account_id integer NOT NULL,
             tank_id integer NOT NULL,
             battles integer NOT NULL,
             console varchar(4) NOT NULL,
@@ -18,7 +18,7 @@ async def setup_database(db):
 
     __ = await conn.execute('''
         CREATE TABLE temp_player_tanks (
-            account_id integer REFERENCES players (account_id),
+            account_id integer NOT NULL,
             tank_id integer NOT NULL,
             battles integer NOT NULL,
             console varchar(4) NOT NULL,
@@ -28,21 +28,21 @@ async def setup_database(db):
 
     __ = await conn.execute('''
         CREATE TABLE {} (
-            account_id integer REFERENCES players (account_id),
+            account_id integer NOT NULL,
             tank_id integer NOT NULL,
             battles integer NOT NULL,
             console varchar(4)NOT NULL,
-            FOREIGN KEY (account_id, tank_id) REFERENCES player_tanks (account_id, tank_id))'''.format(
+            PRIMARY KEY (account_id, tank_id))'''.format(
         datetime.utcnow().strftime('total_tanks_%Y_%m_%d'))
     )
 
     __ = await conn.execute('''
         CREATE TABLE {} (
-            account_id integer REFERENCES players (account_id),
+            account_id integer NOT NULL,
             tank_id integer NOT NULL,
             battles integer NOT NULL,
             console varchar(4) NOT NULL,
-            FOREIGN KEY (account_id, tank_id) REFERENCES player_tanks (account_id, tank_id))'''.format(
+            PRIMARY KEY (account_id, tank_id))'''.format(
         datetime.utcnow().strftime('diff_tanks_%Y_%m_%d'))
     )
 
@@ -102,12 +102,12 @@ async def setup_database(db):
             DECLARE
                 i integer;
             BEGIN
-                FOR i IN 0..(SELECT MAX(account_id) / 1000 FROM temp_player_tanks)
+                FOR i IN 0..(SELECT MAX(account_id) / 100 FROM temp_player_tanks)
                 LOOP
                     INSERT INTO player_tanks (
                         account_id, tank_id, battles, console, _last_api_pull)
                     SELECT * FROM temp_player_tanks
-                    WHERE account_id BETWEEN i AND (1000 * i)
+                    WHERE account_id BETWEEN i AND (100 * i)
                     ON CONFLICT (account_id, tank_id) DO UPDATE
                     SET (battles, console, _last_api_pull) = (EXCLUDED.battles, EXCLUDED.console, EXCLUDED._last_api_pull)
                     WHERE player_tanks.battles <> EXCLUDED.battles;
