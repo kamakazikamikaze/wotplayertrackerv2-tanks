@@ -93,6 +93,8 @@ async def setup_database(db):
     except asyncpg.exceptions.DuplicateObjectError:
         pass
 
+    # In the future, when a more powerful server is being used, have the query server
+    # use the following solution instead: https://sqlperformance.com/2020/09/locking/upsert-anti-pattern
     try:
         # https://dba.stackexchange.com/a/123247
         __ = await conn.execute('''
