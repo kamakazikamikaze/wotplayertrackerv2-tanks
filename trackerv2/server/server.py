@@ -603,9 +603,16 @@ async def try_exit(config, configpath):
         update = False
         conn = await connect(**config['database'])
         logger.info('Merging temporary table into primary table')
-        __ = await conn.execute('SELECT merge_player_tanks()')
-        __ = await conn.execute('DROP TABLE temp_player_tanks')
-        logger.info('Dropped temporary table')
+        # __ = await conn.execute('SELECT merge_player_tanks()')
+        # __ = await conn.execute('DROP TABLE temp_player_tanks')
+        __ = await conn.execute('''INSERT INTO player_tanks (
+                                   account_id, tank_id, battles, console, _last_api_pull)
+                                   SELECT * FROM temp_player_tanks
+                                   ON CONFLICT (account_id, tank_id) DO UPDATE
+                                   SET (battles, console, _last_api_pull) = (
+                                   EXCLUDED.battles, EXCLUDED.console, EXCLUDED._last_api_pull)
+                                   WHERE player_tanks.battles <> EXCLUDED.battles''')
+        # logger.info('Dropped temporary table')
 
         if 'elasticsearch' in config:
             logger.info('Sending data to Elasticsearch')
