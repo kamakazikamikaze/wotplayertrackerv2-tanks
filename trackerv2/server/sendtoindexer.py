@@ -223,6 +223,22 @@ async def create_generator_players(statement, player_ids):
             }
 
 
+async def create_generator_player_tanks(statement, player_id):
+    for tank in await statement.fetch(player_id):
+        yield {
+                "_index": "player_tanks",
+                "_type": "player-tank",
+                "_id": '{}-{}'.format(tank['account_id'], tank['tank_id']),
+                "_source": {
+                    "account_id": tank['account_id'],
+                    "tank_id": tank['tank_id'],
+                    "console": tank['console'],
+                    "battles": tank['battles'],
+                    "last_api_pull": tank['_last_api_pull']
+                }
+            }
+
+
 def create_generator_players_sync(query_results):
     return ({
         "_index": "player_tanks",

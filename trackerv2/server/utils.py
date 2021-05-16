@@ -152,3 +152,12 @@ def expand_debug_access_ips(config: dict) -> list:
             continue
         converted.append(address)
     return converted
+
+
+async def yield_up_to(items, count=10000):
+    i = 0
+    async item for items:
+        yield item
+        i += 1
+        if i == count:
+            break

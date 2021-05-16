@@ -20,13 +20,14 @@ from tornado.escape import json_decode, json_encode
 import tracemalloc
 
 from database import setup_database
-from sendtoindexer import create_generator_diffs, create_generator_players
+from sendtoindexer import create_generator_diffs, create_generator_player_tanks
+from sendtoindexer import create_generator_players
 from sendtoindexer import create_generator_players_sync, send_data
 from sendtoindexer import create_generator_totals, _send_to_cluster_skip_errors
 from utils import genuuid, genhashes, load_config, nested_dd, write_config
 # Import APIResult and Player as we will unpickle them. Ignore unused warnings
 from utils import create_client_config, create_server_config, APIResult, Tank
-from utils import expand_debug_access_ips
+from utils import expand_debug_access_ips, yield_up_to
 #from work import setup_work, calculate_total_batches
 
 workgenerator = None
@@ -447,12 +448,16 @@ async def send_to_elasticsearch(conf, conn, day=datetime.utcnow(), skip_players=
         )
         del diffs, totals
         stmt = await conn.prepare('SELECT * FROM player_tanks WHERE account_id = $1')
-        players = create_generator_players(stmt, player_ids)
-        players = [p async for p in players]
+        # players = create_generator_players(stmt, player_ids)
         eslog = logging.getLogger('elasticsearch')
         eslog.setLevel(logging.ERROR)
         logger.info('ES: Sending players')
-        await send_data(conf, players)
+        # Addressing memory consumption
+        for player in player_ids:
+            await send_data(
+                conf,
+                [tank async for tank in create_generator_player_tanks(stmt, player)]
+            )
     logger.info('ES: Finished')
 
 
