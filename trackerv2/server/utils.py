@@ -156,7 +156,7 @@ def expand_debug_access_ips(config: dict) -> list:
 
 async def yield_up_to(items, count=10000):
     i = 0
-    async item for items:
+    async for item in items:
         yield item
         i += 1
         if i == count:

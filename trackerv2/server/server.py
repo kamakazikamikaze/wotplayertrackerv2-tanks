@@ -27,7 +27,7 @@ from sendtoindexer import create_generator_totals, _send_to_cluster_skip_errors
 from utils import genuuid, genhashes, load_config, nested_dd, write_config
 # Import APIResult and Player as we will unpickle them. Ignore unused warnings
 from utils import create_client_config, create_server_config, APIResult, Tank
-from utils import expand_debug_access_ips, yield_up_to
+from utils import expand_debug_access_ips
 #from work import setup_work, calculate_total_batches
 
 workgenerator = None
