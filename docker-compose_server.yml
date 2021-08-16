@@ -3,19 +3,19 @@ services:
   wotplayertrackerv2-tanks-server:
     image: "kamakazikamikaze/wotplayertrackerv2-tanks:latest"
     ports:
-      - "8888:8888"
+      - "8889:8889"
     environment:
       INIT: 0
       ROLE: server
-      PORT: 8888
+      PORT: 8889
       SERVER_CONFIG: /app/config/server_config.json
       CLIENT_CONFIG: /app/config/client_config.json
       STATIC_FILES: /app/files
       TRACE_MEMORY: 0
-      DB_PROCESSES: 3
+      DB_PROCESSES: 2
       # RECOVER_FROM_DUMP: /path/to/recovery/dump
       AGGRESSIVE_RECOVER: 0
-      ASYNC_DB_HELPERS_PER_PROCESS: 3
+      ASYNC_DB_HELPERS_PER_PROCESS: 5
     volumes:
       - ./config:/app/config:rw
       - ./logs:/app/logs:rw

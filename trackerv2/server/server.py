@@ -511,25 +511,28 @@ async def send_results_to_database(db_pool, res_queue, work_done, par, chi, tbl=
     if tbl == 'player_tanks':
         command = (
             'INSERT INTO player_tanks ('
-            'account_id, tank_id, battles, console)'
+            'account_id, tank_id, battles, console, _last_api_pull)'
             'VALUES ('
             '$1::int, '
             '$2::int, '
             '$3::int, '
-            '$4::text) '
+            '$4::text, '
+            'to_timestamp($5)::timestmap) '
             'ON CONFLICT DO UPDATE '
-            'SET (battles, console) = (EXCLUDED.battles, EXCLUDED.console) '
+            'SET (battles, console, _last_api_pull) = ('
+            'EXCLUDED.battles, EXCLUDED.console, EXCLUDED._last_api_pull) '
             'WHERE player_tanks.battles <> EXCLUDED.battles'
         )
     else:
         command = (
             'INSERT INTO temp_player_tanks ('
-            'account_id, tank_id, battles, console)'
+            'account_id, tank_id, battles, console, _last_api_pull)'
             'VALUES ('
             '$1::int, '
             '$2::int, '
             '$3::int, '
-            '$4::text) '
+            '$4::text, '
+            'to_timestamp($5)::timestamp) '
             'ON CONFLICT DO NOTHING'
         )
     while True:
@@ -611,14 +614,14 @@ async def advance_work(config):
 
 async def try_exit(config, configpath):
     if len(workdone):
+        if received_queue.qsize() and WorkWSHandler.wsconns:
+            # We still have data to send to the database. Don't exit yet.
+            # If no workers, though, proceed.
+            return
         if WorkWSHandler.wsconns:
             for conn in WorkWSHandler.wsconns:
                 conn.close()
             logger.info('Released all clients')
-
-        if received_queue.qsize():
-            # We still have data to send to the database. Don't exit yet.
-            return
         for helper in db_helpers:
             helper.join()
         logger.info('Proceeding with post-run cleanup')
@@ -629,11 +632,18 @@ async def try_exit(config, configpath):
         conn = await connect(**config['database'])
         if config.get('use temp table', False):
             logger.info('Merging temporary table into primary table')
-            __ = await conn.execute('SELECT merge_player_tanks()')
+            # __ = await conn.execute('SELECT merge_player_tanks()')
+            __ = await conn.execute('''INSERT INTO player_tanks (
+                                   account_id, tank_id, battles, console, _last_api_pull)
+                                   SELECT * FROM temp_player_tanks
+                                   ON CONFLICT (account_id, tank_id) DO UPDATE
+                                   SET (battles, console, _last_api_pull) = (
+                                   EXCLUDED.battles, EXCLUDED.console, EXCLUDED._last_api_pull)
+                                   WHERE player_tanks.battles <> EXCLUDED.battles''')
             __ = await conn.execute('DROP TABLE temp_player_tanks')
             logger.info('Dropped temporary table')
 
-        if 'elasticsearch' in config:
+        if 'elasticsearch' in config and config['elasticsearch']['clusters']:
             logger.info('Sending data to Elasticsearch')
             await send_to_elasticsearch(config, conn)
 
