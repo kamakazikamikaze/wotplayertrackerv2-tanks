@@ -116,7 +116,8 @@ def create_server_config(filename: str = './config/server.json'):
         'stats': {
             'file': 'logs/server-stats-tanks-%Y_%m_%d',
             'interval': 1  # seconds
-        }
+        },
+        'use temp table': False
     }
     with open(filename, 'w') as f:
         dump(newconfig, f, indent=4)

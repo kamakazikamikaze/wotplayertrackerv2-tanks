@@ -2,7 +2,7 @@ import asyncpg
 from datetime import datetime
 
 
-async def setup_database(db):
+async def setup_database(db, use_temp=False):
     conn = await asyncpg.connect(**db)
     __ = await conn.execute('''
         CREATE TABLE IF NOT EXISTS player_tanks (
@@ -14,17 +14,18 @@ async def setup_database(db):
             PRIMARY KEY (account_id, tank_id)
         )''')
 
-    __ = await conn.execute('DROP TABLE IF EXISTS temp_player_tanks')
+    if use_temp:
+        __ = await conn.execute('DROP TABLE IF EXISTS temp_player_tanks')
 
-    __ = await conn.execute('''
-        CREATE TABLE temp_player_tanks (
-            account_id integer NOT NULL,
-            tank_id integer NOT NULL,
-            battles integer NOT NULL,
-            console varchar(4) NOT NULL,
-            _last_api_pull timestamp NOT NULL,
-            PRIMARY KEY (account_id, tank_id)
-        )''')
+        __ = await conn.execute('''
+            CREATE TABLE temp_player_tanks (
+                account_id integer REFERENCES players (account_id),
+                tank_id integer NOT NULL,
+                battles integer NOT NULL,
+                console varchar(4) NOT NULL,
+                _last_api_pull timestamp NOT NULL,
+                PRIMARY KEY (account_id, tank_id)
+            )''')
 
     __ = await conn.execute('''
         CREATE TABLE {} (
