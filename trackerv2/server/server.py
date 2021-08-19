@@ -591,7 +591,7 @@ def result_handler(dbconf, res_queue, work_done, par, use_temp=False, pool_size=
                     work_done,
                     par,
                     c,
-                    'player_tanls' if not use_temp else 'temp_player_tanks')
+                    'player_tanks' if not use_temp else 'temp_player_tanks')
                 for c in range(pool_size)])
         )
     finally:
