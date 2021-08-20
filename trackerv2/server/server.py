@@ -517,7 +517,7 @@ async def send_results_to_database(db_pool, res_queue, work_done, par, chi, tbl=
             '$2::int, '
             '$3::int, '
             '$4::text, '
-            'to_timestamp($5)::timestmap) '
+            'to_timestamp($5)::timestamp) '
             'ON CONFLICT DO UPDATE '
             'SET (battles, console, _last_api_pull) = ('
             'EXCLUDED.battles, EXCLUDED.console, EXCLUDED._last_api_pull) '
