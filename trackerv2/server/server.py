@@ -1,7 +1,7 @@
 import asyncio
 from asyncpg import create_pool, connect
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from ipaddress import ip_address
 from json.decoder import JSONDecodeError
@@ -518,7 +518,7 @@ async def send_results_to_database(db_pool, res_queue, work_done, par, chi, tbl=
             '$3::int, '
             '$4::text, '
             'to_timestamp($5)::timestamp) '
-            'ON CONFLICT DO UPDATE '
+            'ON CONFLICT (account_id, tank_id) DO UPDATE '
             'SET (battles, console, _last_api_pull) = ('
             'EXCLUDED.battles, EXCLUDED.console, EXCLUDED._last_api_pull) '
             'WHERE player_tanks.battles <> EXCLUDED.battles'
@@ -668,27 +668,18 @@ def make_app(sfiles, serverconfig, clientconfig):
     ])
 
 
-def setup_work(config):
-    day = datetime.utcnow()
+def setup_work(config, days=1):
+    query = 'SELECT account_id, console FROM total_battles_{0} UNION SELECT account_id, console FROM diff_battles_{0}'
+    start_day = datetime.utcnow()
     conn = ioloop.IOLoop.current().run_sync(
         lambda: connect(**config['database']))
-    result = ioloop.IOLoop.current().run_sync(
-        lambda: conn.fetch(
-            'SELECT account_id, console FROM total_battles_{0} UNION SELECT account_id, console FROM diff_battles_{0}'.format(
-                day.strftime('%Y_%m_%d'))))
+    result = list()
+    for d in range(days):
+        day = start_day - timedelta(days=d)
+        result.extend(ioloop.IOLoop.current().run_sync(
+            lambda: conn.fetch(query.format(day.strftime('%Y_%m_%d')))))
     del conn
-    return ((i, row['account_id'], row['console']) for i, row in enumerate(result))
-
-
-def calculate_total_batches(config):
-    day = datetime.utcnow()
-    conn = ioloop.IOLoop.current().run_sync(
-        lambda: connect(**config['database']))
-    result = ioloop.IOLoop.current().run_sync(
-        lambda: conn.fetch(
-            'SELECT account_id, console FROM total_battles_{0} UNION SELECT account_id, console FROM diff_battles_{0}'.format(
-                day.strftime('%Y_%m_%d'))))
-    return len(result)
+    return ((i, row['account_id'], row['console']) for i, row in enumerate(result)), len(result)
 
 
 if __name__ == '__main__':
@@ -764,8 +755,7 @@ if __name__ == '__main__':
     manager = Manager()
     workdone = manager.list()
     received_queue = manager.Queue()
-    workgenerator = setup_work(server_config)
-    totalbatches = calculate_total_batches(server_config)
+    workgenerator, totalbatches = setup_work(server_config, days=server_config.get('days', 1))
     assignedwork = nested_dd()
     timeouts = nested_dd()
     stalework = deque()
