@@ -674,11 +674,11 @@ def setup_work(config, days=1):
     start_day = datetime.utcnow()
     conn = ioloop.IOLoop.current().run_sync(
         lambda: connect(**config['database']))
-    result = list()
+    result = set()
     for d in range(days):
         day = start_day - timedelta(days=d)
         try:
-            result.extend(ioloop.IOLoop.current().run_sync(
+            result.update(ioloop.IOLoop.current().run_sync(
                 lambda: conn.fetch(query.format(day.strftime('%Y_%m_%d')))))
         except UndefinedTableError:
             continue
