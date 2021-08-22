@@ -1,5 +1,6 @@
 import asyncio
 from asyncpg import create_pool, connect
+from asyncpg.exceptions import UndefinedTableError
 from collections import deque
 from datetime import datetime, timedelta
 from functools import partial
@@ -676,8 +677,11 @@ def setup_work(config, days=1):
     result = list()
     for d in range(days):
         day = start_day - timedelta(days=d)
-        result.extend(ioloop.IOLoop.current().run_sync(
-            lambda: conn.fetch(query.format(day.strftime('%Y_%m_%d')))))
+        try:
+            result.extend(ioloop.IOLoop.current().run_sync(
+                lambda: conn.fetch(query.format(day.strftime('%Y_%m_%d')))))
+        except UndefinedTableError:
+            continue
     del conn
     return ((i, row['account_id'], row['console']) for i, row in enumerate(result)), len(result)
 
