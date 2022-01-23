@@ -668,12 +668,19 @@ async def try_exit(config, configpath):
             logger.info('Merging temporary table into primary table')
             # __ = await conn.execute('SELECT merge_player_tanks()')
             __ = await conn.execute(
-                '''INSERT INTO player_tanks (
-                account_id, tank_id, battles, console, _last_api_pull)
+                '''
+                INSERT INTO player_tanks (
+                  account_id, tank_id, battles, console, spotted, wins,
+                  damage_dealt, frags, dropped_capture_points, _last_api_pull)
                 SELECT * FROM temp_player_tanks
                 ON CONFLICT (account_id, tank_id) DO UPDATE
-                SET (battles, console, _last_api_pull) = (
-                EXCLUDED.battles, EXCLUDED.console, EXCLUDED._last_api_pull)
+                SET (
+                  battles, console, spotted, wins, damage_dealt, frags,
+                  dropped_capture_points, _last_api_pull
+                ) = (
+                  EXCLUDED.battles, EXCLUDED.console, EXCLUDED.spotted,
+                  EXCLUDED.wins, EXCLUDED.damage_dealt, EXCLUDED.frags,
+                  EXCLUDED.dropped_capture_points, EXCLUDED._last_api_pull)
                 WHERE player_tanks.battles <> EXCLUDED.battles''')
             __ = await conn.execute('DROP TABLE temp_player_tanks')
             logger.info('Dropped temporary table')
