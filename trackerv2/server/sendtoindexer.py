@@ -177,9 +177,9 @@ def load_local(conf):
 
 
 # generators
-def create_generator_totals(day, query_results):
+def create_generator_totals(day, query_results, _index='total_tanks-%Y.%m.%d'):
     return ({
-        "_index": day.strftime("total_tanks-%Y.%m.%d"),
+        "_index": day.strftime(_index),
         "_type": "total-tank",
         "_id": '{}-{}'.format(tank['account_id'], tank['tank_id']),
         "_source": {
@@ -187,14 +187,19 @@ def create_generator_totals(day, query_results):
             "tank_id": tank['tank_id'],
             "battles": tank['battles'],
             "console": tank['console'],
+            "spotted": tank.get('spotted', None),
+            "wins": tank.get('wins', None),
+            "damage_dealt": tank.get('damage_dealt', None),
+            "frags": tank.get('frags', None),
+            "dropped_capture_points": tank.get('dropped_capture_points', None),
             "date": day.strftime("%Y-%m-%d")
         }
     } for tank in query_results)
 
 
-def create_generator_diffs(day, query_results):
+def create_generator_diffs(day, query_results, _index='diff_tanks-%Y.%m.%d'):
     return ({
-        "_index": day.strftime("diff_tanks-%Y.%m.%d"),
+        "_index": day.strftime(_index),
         "_type": "diff-tank",
         "_id": '{}-{}'.format(tank['account_id'], tank['tank_id']),
         "_source": {
@@ -202,16 +207,21 @@ def create_generator_diffs(day, query_results):
             "tank_id": tank['tank_id'],
             "battles": tank['battles'],
             "console": tank['console'],
+            "spotted": tank.get('spotted', None),
+            "wins": tank.get('wins', None),
+            "damage_dealt": tank.get('damage_dealt', None),
+            "frags": tank.get('frags', None),
+            "dropped_capture_points": tank.get('dropped_capture_points', None),
             "date": day.strftime("%Y-%m-%d")
         }
     } for tank in query_results)
 
 
-async def create_generator_players(statement, player_ids):
+async def create_generator_players(statement, player_ids, _index='player_tanks'):
     for pid in player_ids:
         for tank in await statement.fetch(pid):
             yield {
-                "_index": "player_tanks",
+                "_index": _index,
                 "_type": "player-tank",
                 "_id": '{}-{}'.format(tank['account_id'], tank['tank_id']),
                 "_source": {
@@ -219,15 +229,20 @@ async def create_generator_players(statement, player_ids):
                     "tank_id": tank['tank_id'],
                     "console": tank['console'],
                     "battles": tank['battles'],
+                    "spotted": tank.get('spotted', None),
+                    "wins": tank.get('wins', None),
+                    "damage_dealt": tank.get('damage_dealt', None),
+                    "frags": tank.get('frags', None),
+                    "dropped_capture_points": tank.get('dropped_capture_points', None),
                     "last_api_pull": tank['_last_api_pull']
                 }
             }
 
 
-async def create_generator_player_tanks(statement, player_id):
+async def create_generator_player_tanks(statement, player_id, _index='player_tanks'):
     for tank in await statement.fetch(player_id):
         yield {
-                "_index": "player_tanks",
+                "_index": _index,
                 "_type": "player-tank",
                 "_id": '{}-{}'.format(tank['account_id'], tank['tank_id']),
                 "_source": {
@@ -235,14 +250,19 @@ async def create_generator_player_tanks(statement, player_id):
                     "tank_id": tank['tank_id'],
                     "console": tank['console'],
                     "battles": tank['battles'],
+                    "spotted": tank.get('spotted', None),
+                    "wins": tank.get('wins', None),
+                    "damage_dealt": tank.get('damage_dealt', None),
+                    "frags": tank.get('frags', None),
+                    "dropped_capture_points": tank.get('dropped_capture_points', None),
                     "last_api_pull": tank['_last_api_pull']
                 }
             }
 
 
-def create_generator_players_sync(query_results):
+def create_generator_players_sync(query_results, _index='player_tanks'):
     return ({
-        "_index": "player_tanks",
+        "_index": _index,
         "_type": "player-tank",
         "_id": '{}-{}'.format(tank['account_id'], tank['tank_id']),
         "_source": {
@@ -250,6 +270,11 @@ def create_generator_players_sync(query_results):
             "tank_id": tank['tank_id'],
             "console": tank['console'],
             "battles": tank['battles'],
+            "spotted": tank.get('spotted', None),
+            "wins": tank.get('wins', None),
+            "damage_dealt": tank.get('damage_dealt', None),
+            "frags": tank.get('frags', None),
+            "dropped_capture_points": tank.get('dropped_capture_points', None),
             "last_api_pull": tank['_last_api_pull']
         }
     } for tank in query_results)

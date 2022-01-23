@@ -429,17 +429,23 @@ async def send_to_elasticsearch(conf, conn, day=datetime.utcnow(), skip_players=
     """
     # Generators get exhausted after a single Elasticsearch instance. Although
     # the intent was to save on memory, I'm afraid we need to gather all docs
+    if 'indices' not in conf:
+        conf['indices'] = {
+            'player': 'player_tanks',
+            'diff': 'diff_tanks-%Y.%m.%d',
+            'total': 'total_tanks-%Y.%m.%d'
+        }
     totals = create_generator_totals(
         day,
-        await conn.fetch('SELECT * FROM total_tanks_{}'.format(
-            day.strftime('%Y_%m_%d'))))
+        await conn.fetch('SELECT * FROM total_tanks_{}'.format(day.strftime('%Y_%m_%d'))),
+        conf['indices'].get('total', 'total_tanks-%Y.%m.%d'))
     logger.info('ES: Sending totals for {}'.format(day.strftime('%Y-%m-%d')))
     totals = [t for t in totals]
     await send_data(conf, totals)
     diffs = create_generator_diffs(
         day,
-        await conn.fetch('SELECT * FROM diff_tanks_{}'.format(
-            day.strftime('%Y_%m_%d'))))
+        await conn.fetch('SELECT * FROM diff_tanks_{}'.format(day.strftime('%Y_%m_%d'))),
+        conf['indices'].get('diff', 'diff_tanks-%Y.%m.%d'))
     logger.info('ES: Sending diffs for {}'.format(day.strftime('%Y-%m-%d')))
     diffs = [d for d in diffs]
     await send_data(conf, diffs)
@@ -458,7 +464,7 @@ async def send_to_elasticsearch(conf, conn, day=datetime.utcnow(), skip_players=
         for player in player_ids:
             await send_data(
                 conf,
-                [tank async for tank in create_generator_player_tanks(stmt, player)]
+                [tank async for tank in create_generator_player_tanks(stmt, player, conf['indices'].get('player', 'player_tanks'))]
             )
     logger.info('ES: Finished')
 
@@ -470,27 +476,30 @@ async def send_everything_to_elasticsearch(conf, conn):
             "table_schema='public' AND table_type='BASE TABLE'"
         )
     )
+    if 'indices' not in conf:
+        conf['indices'] = {
+            'player': 'player_tanks',
+            'diff': 'diff_tanks-%Y.%m.%d',
+            'total': 'total_tanks-%Y.%m.%d'
+        }
     for table in tables:
         logger.info('ES: Sending %s', table['table_name'])
         if 'diff_tanks' in table['table_name']:
             diffs = create_generator_diffs(
-                datetime.strptime(
-                    table['table_name'],
-                    'diff_tanks_%Y_%m_%d'),
-                await conn.fetch(
-                    'SELECT * from {}'.format(table['table_name'])))
+                datetime.strptime(table['table_name'], 'diff_tanks_%Y_%m_%d'),
+                await conn.fetch('SELECT * from {}'.format(table['table_name'])),
+                conf['indices'].get('diff', 'diff_tanks-%Y.%m.%d'))
             await send_data(conf, diffs)
         elif 'total_tanks' in table['table_name']:
             totals = create_generator_totals(
-                datetime.strptime(
-                    table['table_name'],
-                    'total_tanks_%Y_%m_%d'),
-                await conn.fetch(
-                    'SELECT * from {}'.format(table['table_name'])))
+                datetime.strptime(table['table_name'], 'total_tanks_%Y_%m_%d'),
+                await conn.fetch('SELECT * from {}'.format(table['table_name'])),
+                conf['indices'].get('total', 'total_tanks-%Y.%m.%d'))
             await send_data(conf, totals)
         elif 'player_tanks' == table['table_name']:
             players = create_generator_players_sync(
-                await conn.fetch('SELECT * FROM player_tanks'))
+                await conn.fetch('SELECT * FROM player_tanks'),
+                conf['indices'].get('player', 'player_tanks'))
             await send_data(conf, players)
 
 
@@ -501,8 +510,16 @@ async def send_missing_players_to_elasticsearch(conf, conn):
     Only updated players have information sent to ES. If a new cluster
     is added, it will not have all players in it as a result.
     """
+    if 'indices' not in conf:
+        conf['indices'] = {
+            'player': 'player_tanks',
+            'diff': 'diff_tanks-%Y.%m.%d',
+            'total': 'total_tanks-%Y.%m.%d'
+        }
     players = [p for p in create_generator_players_sync(
-        await conn.fetch('SELECT * FROM player_tanks'))]
+        await conn.fetch('SELECT * FROM player_tanks'),
+        conf['indices'].get('player', 'player_tanks'))
+    ]
     for name, cluster in conf['elasticsearch']['clusters'].items():
         await _send_to_cluster_skip_errors(cluster, players)
 
@@ -513,28 +530,43 @@ async def send_results_to_database(db_pool, res_queue, work_done, par, chi, tbl=
     if tbl == 'player_tanks':
         command = (
             'INSERT INTO player_tanks ('
-            'account_id, tank_id, battles, console, _last_api_pull)'
+            'account_id, tank_id, battles, console, spotted, wins, damage_dealt, '
+            'frags, dropped_capture_points, _last_api_pull) '
             'VALUES ('
             '$1::int, '
             '$2::int, '
             '$3::int, '
             '$4::text, '
-            'to_timestamp($5)::timestamp) '
+            '$5::int, '
+            '$6::int, '
+            '$7::int, '
+            '$8::int, '
+            '$9::int, '
+            'to_timestamp($10)::timestamp) '
             'ON CONFLICT (account_id, tank_id) DO UPDATE '
-            'SET (battles, console, _last_api_pull) = ('
-            'EXCLUDED.battles, EXCLUDED.console, EXCLUDED._last_api_pull) '
+            'SET (battles, console, spotted, wins, damage_dealt, frags, '
+            'dropped_capture_points, _last_api_pull) = ('
+            'EXCLUDED.battles, EXCLUDED.console, EXCLUDED.spotted, '
+            'EXCLUDED.wins, EXCLUDED.damage_dealt, EXCLUDED.frags, '
+            'EXCLUDED.dropped_capture_points, EXCLUDED._last_api_pull) '
             'WHERE player_tanks.battles <> EXCLUDED.battles'
         )
     else:
         command = (
             'INSERT INTO temp_player_tanks ('
-            'account_id, tank_id, battles, console, _last_api_pull)'
+            'account_id, tank_id, battles, console, spotted, wins, damage_dealt, '
+            'frags, dropped_capture_points, _last_api_pull) '
             'VALUES ('
             '$1::int, '
             '$2::int, '
             '$3::int, '
             '$4::text, '
-            'to_timestamp($5)::timestamp) '
+            '$5::int, '
+            '$6::int, '
+            '$7::int, '
+            '$8::int, '
+            '$9::int, '
+            'to_timestamp($10)::timestamp) '
             'ON CONFLICT DO NOTHING'
         )
     while True:
@@ -635,13 +667,14 @@ async def try_exit(config, configpath):
         if config.get('use temp table', False):
             logger.info('Merging temporary table into primary table')
             # __ = await conn.execute('SELECT merge_player_tanks()')
-            __ = await conn.execute('''INSERT INTO player_tanks (
-                                   account_id, tank_id, battles, console, _last_api_pull)
-                                   SELECT * FROM temp_player_tanks
-                                   ON CONFLICT (account_id, tank_id) DO UPDATE
-                                   SET (battles, console, _last_api_pull) = (
-                                   EXCLUDED.battles, EXCLUDED.console, EXCLUDED._last_api_pull)
-                                   WHERE player_tanks.battles <> EXCLUDED.battles''')
+            __ = await conn.execute(
+                '''INSERT INTO player_tanks (
+                account_id, tank_id, battles, console, _last_api_pull)
+                SELECT * FROM temp_player_tanks
+                ON CONFLICT (account_id, tank_id) DO UPDATE
+                SET (battles, console, _last_api_pull) = (
+                EXCLUDED.battles, EXCLUDED.console, EXCLUDED._last_api_pull)
+                WHERE player_tanks.battles <> EXCLUDED.battles''')
             __ = await conn.execute('DROP TABLE temp_player_tanks')
             logger.info('Dropped temporary table')
 

@@ -163,6 +163,11 @@ class ResultProcessor(object):
                                     t['tank_id'],
                                     t['all']['battles'],
                                     work[2],
+                                    t['all']['spotted'],
+                                    t['all']['wins'],
+                                    t['all']['damage_dealt'],
+                                    t['all']['frags'],
+                                    t['all']['dropped_capture_points']
                                 ) for t in response['data'][str(work[1])]) if response['data'][str(work[1])] else None,
                             start.timestamp(),
                             work[0]
@@ -220,7 +225,12 @@ async def query(key, session, workqueue, resultqueue, workdone, log):
         'fields': (
             'account_id,'
             'tank_id,'
-            'all.battles'
+            'all.battles,'
+            'all.damage_dealt,'
+            'all.spotted,'
+            'all.frags,'
+            'all.dropped_capture_points,'
+            'all.wins'
         ),
         'language': 'en'
     }
