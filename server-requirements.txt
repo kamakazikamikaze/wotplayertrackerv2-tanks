@@ -1,6 +1,2 @@
-asyncpg==0.20.1
-certifi==2018.8.24
-elasticsearch==6.3.1
-tornado==6.0.3
-urllib3==1.23
-wincertstore==0.2
+asyncpg==0.25.0
+tornado==6.1
