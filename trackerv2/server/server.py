@@ -21,10 +21,6 @@ from tornado.escape import json_decode, json_encode
 import tracemalloc
 
 from database import setup_database
-from sendtoindexer import create_generator_diffs, create_generator_player_tanks
-from sendtoindexer import create_generator_players
-from sendtoindexer import create_generator_players_sync, send_data
-from sendtoindexer import create_generator_totals, _send_to_cluster_skip_errors
 from utils import genuuid, genhashes, load_config, nested_dd, write_config
 # Import APIResult and Player as we will unpickle them. Ignore unused warnings
 from utils import create_client_config, create_server_config, APIResult, Tank
@@ -420,110 +416,6 @@ class TelemetryWSHandler(websocket.WebSocketHandler):
         telelogger.debug(genuuid(self.request.remote_ip) + message)
 
 
-# TODO: Modify
-async def send_to_elasticsearch(conf, conn, day=datetime.utcnow(), skip_players=False):
-    r"""
-    Send updates to Elasticsearch.
-
-    This method should be called once work has concluded.
-    """
-    # Generators get exhausted after a single Elasticsearch instance. Although
-    # the intent was to save on memory, I'm afraid we need to gather all docs
-    if 'indices' not in conf:
-        conf['indices'] = {
-            'player': 'player_tanks',
-            'diff': 'diff_tanks-%Y.%m.%d',
-            'total': 'total_tanks-%Y.%m.%d'
-        }
-    totals = create_generator_totals(
-        day,
-        await conn.fetch('SELECT * FROM total_tanks_{}'.format(day.strftime('%Y_%m_%d'))),
-        conf['indices'].get('total', 'total_tanks-%Y.%m.%d'))
-    logger.info('ES: Sending totals for {}'.format(day.strftime('%Y-%m-%d')))
-    totals = [t for t in totals]
-    await send_data(conf, totals)
-    diffs = create_generator_diffs(
-        day,
-        await conn.fetch('SELECT * FROM diff_tanks_{}'.format(day.strftime('%Y_%m_%d'))),
-        conf['indices'].get('diff', 'diff_tanks-%Y.%m.%d'))
-    logger.info('ES: Sending diffs for {}'.format(day.strftime('%Y-%m-%d')))
-    diffs = [d for d in diffs]
-    await send_data(conf, diffs)
-    if not skip_players:
-        player_ids = set.union(
-            set(map(lambda p: int(p['_source']['account_id']), totals)),
-            set(map(lambda p: int(p['_source']['account_id']), diffs))
-        )
-        del diffs, totals
-        stmt = await conn.prepare('SELECT * FROM player_tanks WHERE account_id = $1')
-        # players = create_generator_players(stmt, player_ids)
-        eslog = logging.getLogger('elasticsearch')
-        eslog.setLevel(logging.ERROR)
-        logger.info('ES: Sending players')
-        # Addressing memory consumption
-        for player in player_ids:
-            await send_data(
-                conf,
-                [tank async for tank in create_generator_player_tanks(stmt, player, conf['indices'].get('player', 'player_tanks'))]
-            )
-    logger.info('ES: Finished')
-
-
-async def send_everything_to_elasticsearch(conf, conn):
-    tables = await conn.fetch(
-        (
-            "SELECT table_name FROM information_schema.tables WHERE "
-            "table_schema='public' AND table_type='BASE TABLE'"
-        )
-    )
-    if 'indices' not in conf:
-        conf['indices'] = {
-            'player': 'player_tanks',
-            'diff': 'diff_tanks-%Y.%m.%d',
-            'total': 'total_tanks-%Y.%m.%d'
-        }
-    for table in tables:
-        logger.info('ES: Sending %s', table['table_name'])
-        if 'diff_tanks' in table['table_name']:
-            diffs = create_generator_diffs(
-                datetime.strptime(table['table_name'], 'diff_tanks_%Y_%m_%d'),
-                await conn.fetch('SELECT * from {}'.format(table['table_name'])),
-                conf['indices'].get('diff', 'diff_tanks-%Y.%m.%d'))
-            await send_data(conf, diffs)
-        elif 'total_tanks' in table['table_name']:
-            totals = create_generator_totals(
-                datetime.strptime(table['table_name'], 'total_tanks_%Y_%m_%d'),
-                await conn.fetch('SELECT * from {}'.format(table['table_name'])),
-                conf['indices'].get('total', 'total_tanks-%Y.%m.%d'))
-            await send_data(conf, totals)
-        elif 'player_tanks' == table['table_name']:
-            players = create_generator_players_sync(
-                await conn.fetch('SELECT * FROM player_tanks'),
-                conf['indices'].get('player', 'player_tanks'))
-            await send_data(conf, players)
-
-
-async def send_missing_players_to_elasticsearch(conf, conn):
-    r"""
-    Synchronizes players from an existing database to Elasticsearch.
-
-    Only updated players have information sent to ES. If a new cluster
-    is added, it will not have all players in it as a result.
-    """
-    if 'indices' not in conf:
-        conf['indices'] = {
-            'player': 'player_tanks',
-            'diff': 'diff_tanks-%Y.%m.%d',
-            'total': 'total_tanks-%Y.%m.%d'
-        }
-    players = [p for p in create_generator_players_sync(
-        await conn.fetch('SELECT * FROM player_tanks'),
-        conf['indices'].get('player', 'player_tanks'))
-    ]
-    for name, cluster in conf['elasticsearch']['clusters'].items():
-        await _send_to_cluster_skip_errors(cluster, players)
-
-
 async def send_results_to_database(db_pool, res_queue, work_done, par, chi, tbl='player_tanks'):
     logger = logging.getLogger('WoTServer')
     logger.debug('Process-%i: Async-%i created', par, chi)
@@ -685,9 +577,6 @@ async def try_exit(config, configpath):
             __ = await conn.execute('DROP TABLE temp_player_tanks')
             logger.info('Dropped temporary table')
 
-        if 'elasticsearch' in config and config['elasticsearch']['clusters']:
-            logger.info('Sending data to Elasticsearch')
-            await send_to_elasticsearch(config, conn)
 
         logger.info('Shutting down server')
         ioloop.IOLoop.current().stop()
@@ -712,7 +601,7 @@ def make_app(sfiles, serverconfig, clientconfig):
 
 def setup_work(config, days=1):
     query = 'SELECT account_id, console FROM total_battles_{0} UNION SELECT account_id, console FROM diff_battles_{0}'
-    start_day = datetime.utcnow()
+    start_day = datetime.utcnow() - timedelta(days=1)
     conn = ioloop.IOLoop.current().run_sync(
         lambda: connect(**config['database']))
     result = set()
