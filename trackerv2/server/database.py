@@ -60,7 +60,7 @@ async def setup_database(db, use_temp=False):
 
         __ = await conn.execute('''
             CREATE TABLE temp_player_tanks (
-                account_id integer REFERENCES players (account_id),
+                account_id integer NOT NULL,
                 tank_id integer NOT NULL,
                 battles integer NOT NULL,
                 console varchar(4) NOT NULL,
@@ -90,9 +90,6 @@ async def setup_database(db, use_temp=False):
 
         CREATE UNIQUE INDEX IF NOT EXISTS total_tanks_account_id_tank_id_idx
             ON total_tanks USING btree (account_id, tank_id, _date);
-
-        CREATE INDEX IF NOT EXISTS total_tanks_date_idx
-            ON total_tanks USING btree (_date);
         ''')
 
     __ = await add_missing_columns(conn, 'total_tanks', SERIES_COLUMNS)
@@ -114,9 +111,6 @@ async def setup_database(db, use_temp=False):
 
         CREATE UNIQUE INDEX IF NOT EXISTS diff_tanks_account_id_tank_id_idx
             ON diff_tanks USING btree (account_id, tank_id, _date);
-
-        CREATE INDEX IF NOT EXISTS diff_tanks_date_idx
-            ON diff_tanks USING btree (_date);
         ''')
 
     __ = await add_missing_columns(conn, 'diff_tanks', SERIES_COLUMNS)
